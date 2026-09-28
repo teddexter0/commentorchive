@@ -20,8 +20,8 @@
 
 /* Accent roles: sky = navigation/focus/system; gold = meaning/resonance. Never blended. */
 .category-name:before,.category-name:after,.fragment-card:after{display:none}.ocr-progress i{background:var(--sky)}
-.article-card-title{width:max-content;max-width:calc(100% - 28px);text-decoration:line-through;text-decoration-color:transparent;text-decoration-thickness:1.5px;transition:color .25s var(--ease),text-decoration-color .25s var(--ease)}
-.fragment-card:hover .article-card-title{text-decoration-color:var(--gold)}
+.article-card-title{width:max-content;max-width:calc(100% - 28px);text-decoration:none;background-image:linear-gradient(var(--gold),var(--gold));background-position:0 100%;background-repeat:no-repeat;background-size:0 2px;transition:color .25s var(--ease),background-size .42s var(--ease)}
+.fragment-card:hover .article-card-title{background-size:100% 2px}
 
 /* Interactive surfaces invert as a complete black/white unit. */
 .fragment-card:hover{background:#000;color:#fff;border-color:#000}.fragment-card:hover .card-source,.fragment-card:hover .article-card-title,.fragment-card:hover .card-note,.fragment-card:hover .resonance-line,.fragment-card:hover .card-date{color:#fff}.fragment-card:hover .card-note{border-color:#303033}.fragment-card:hover .category-pill{border-color:#535358;color:#fff}.fragment-card:hover .tag{background:#202023;color:#fff}.fragment-card:hover .quote-mark{color:#38383c}
