@@ -1,4 +1,1 @@
-window.COMMENTARY_CONFIG = Object.freeze({
-  supabaseUrl: "https://rxebktpigpfknnfzpfgs.supabase.co",
-  supabasePublishableKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4ZWJrdHBpZ3Bma25uZnpwZmdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNzM3MzcsImV4cCI6MjEwNDg0OTczN30.VplYMW0fyqjgsmocRqKPTvQVNFKd3p3oMDFOZXO4zeI"
-});
+window.COMMENTARY_CONFIG = Object.freeze({"firebase":{"apiKey":"AIzaSyCOvKgkFcbGy2H1HAV-vYbaLH1nwDunkoQ","authDomain":"commentorchive.firebaseapp.com","projectId":"commentorchive","appId":"1:480569120625:web:9e29269175cd532ee2c8d0"}});

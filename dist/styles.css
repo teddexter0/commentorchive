@@ -29,3 +29,19 @@
 .more-category{transition:background .25s var(--ease),color .25s var(--ease)}.more-category:hover{background:#000;color:#fff;border-color:#000}.more-category:hover .more-parent{background:#000;color:#fff}.more-category:hover .more-topics{border-color:#333}.more-category:hover .more-topics button{background:#1e1e20;color:#fff}.more-category:hover .more-topics button:hover{background:#fff;color:#000}
 .nav-item:hover,.category-trigger:hover{background:#fff;color:#000}.nav-item:hover b,.category-trigger:hover b,.nav-item:hover .nav-symbol,.category-trigger:hover .nav-symbol{color:#000}.subnav-item:hover{background:#fff;color:#000}
 .insight-panel{transition:background .25s var(--ease),color .25s var(--ease),border-color .25s var(--ease)}.insight-panel:hover{background:#000;color:#fff;border-color:#000}.insight-panel:hover>p{color:#d0d0d5}.resonance-panel{border-color:var(--gold)}.detail-thesis{border-color:var(--sky)}
+/* Three independently paired reading layers. */
+:root{--layer0-bg:#f5f5f7;--layer0-fg:#141414;--layer1-bg:#000;--layer1-fg:#fff;--layer2-bg:#fff;--layer2-fg:#141414}
+html,body,.workspace{background:var(--layer0-bg);color:var(--layer0-fg)}
+.topbar h1,.archive-meta,.eyebrow{color:inherit}
+.sidebar,.mobile-nav{background:var(--layer1-bg);color:var(--layer1-fg)}
+.sidebar .brand,.sidebar button,.sidebar .nav-label,.sidebar b,.sidebar small,.sidebar .nav-symbol,.mobile-nav button{color:inherit}
+.sidebar .nav-item:hover,.sidebar .category-trigger:hover,.sidebar .nav-item.active,.sidebar .category-trigger.active{background:var(--layer1-fg);color:var(--layer1-bg)}
+.fragment-card,.fragment-card:hover,.modal,.search-box,.chip,.sort-button{background:var(--layer2-bg);color:var(--layer2-fg);border-color:color-mix(in srgb,var(--layer2-fg) 25%,transparent)}
+.fragment-card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+.fragment-card .article-card-title,.fragment-card .card-source,.fragment-card .card-note,.fragment-card .resonance-line,.fragment-card .card-date,.fragment-card .category-pill,.fragment-card:hover .article-card-title,.fragment-card:hover .card-source,.fragment-card:hover .card-note,.fragment-card:hover .resonance-line,.fragment-card:hover .card-date,.fragment-card:hover .category-pill,.modal .eyebrow,.modal .modal-intro,.modal .field>span{color:inherit}
+.fragment-card .tag,.fragment-card:hover .tag,.fragment-card .category-pill{background:transparent;color:inherit;border:1px solid currentColor}
+.modal input,.modal textarea,.modal select{background:var(--layer2-bg);color:var(--layer2-fg);border:1px solid currentColor;border-radius:10px;padding:10px;width:100%;max-width:100%}
+.modal .secondary-button{background:transparent;color:inherit;border:1px solid currentColor}.modal .primary-button{background:var(--layer2-fg);color:var(--layer2-bg)}
+.colour-pair{margin:16px 0;padding:12px;border:1px solid currentColor;border-radius:12px;display:flex;gap:20px}.colour-pair label{display:grid;gap:8px;flex:1}.colour-pair input[type=color]{height:42px;padding:3px;cursor:pointer}
+.personal-actions{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.detail-image{max-width:100%;max-height:60vh;object-fit:contain;border-radius:12px}.original-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:45vh;overflow:auto}.favourite-mark{font-size:1.25rem;color:inherit}.more-grid{gap:12px}.sidebar-foot .quiet-button{color:inherit}button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid #4285f4;outline-offset:3px}
+@media(max-width:760px){.personal-actions button{flex:1}.colour-pair{gap:12px}.modal-actions{flex-wrap:wrap}}
