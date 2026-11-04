@@ -1,1 +1,25 @@
-{"outputDirectory":"dist","framework":null,"headers":[{"source":"/sw.js","headers":[{"key":"Cache-Control","value":"no-cache"}]}],"buildCommand":"npm run build"}
+{
+  "outputDirectory": "dist",
+  "framework": null,
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'none'"
+        }
+      ]
+    }
+  ],
+  "buildCommand": "npm run build"
+}
