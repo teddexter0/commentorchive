@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="A private archive that reads, sorts, and reconnects the ideas you save." />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com https://apis.google.com; worker-src 'self' blob:; connect-src 'self' https://r.jina.ai https://*.googleapis.com https://*.firebaseapp.com https://www.gstatic.com/firebasejs/11.10.0/; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com https://apis.google.com; worker-src 'self' blob:; connect-src 'self' https://r.jina.ai https://*.googleapis.com https://*.firebaseapp.com https://www.gstatic.com/firebasejs/11.10.0/; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
     <title>Commentary Archive</title>
   </head>
   <body>
@@ -95,6 +95,6 @@
     </dialog>
 
     <dialog id="preferencesDialog" class="modal compact-modal"><form id="preferencesForm"><div class="modal-head"><h2>Make it yours.</h2><button type="button" id="closePreferences" class="icon-button" aria-label="Close">×</button></div><p>Three layers, each with its own background and text. Colours must remain readable.</p><div id="colourPairs"></div><p id="contrastError" class="form-error" hidden></p><label class="field"><span>Categories <em>one per line; yours alone</em></span><textarea id="categoryNames" rows="6" maxlength="1000"></textarea></label><p class="modal-intro">Rename or add categories. Existing items keep their category until you move them. New archives start empty.</p><button class="primary-button" type="submit">Save preferences</button><button class="secondary-button" id="resetColours" type="button">Reset colours</button></form></dialog><div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./config.js?v=12"></script><script src="./ocr/tesseract.min.js?v=12" defer></script><script src="./app.js?v=12" defer></script><script src="./firebase-cloud.js?v=12" defer></script><script src="./main.js?v=12" defer></script><script src="./personal.js?v=12" defer></script>
+    <script src="./config.js?v=13"></script><script src="./ocr/tesseract.min.js?v=13" defer></script><script src="./app.js?v=13" defer></script><script src="./firebase-cloud.js?v=13" defer></script><script src="./main.js?v=13" defer></script><script src="./personal.js?v=13" defer></script>
   </body>
 </html>

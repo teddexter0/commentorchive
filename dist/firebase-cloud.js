@@ -12,7 +12,9 @@ async function connectFirebase() {
     import(firebaseSdk + 'firebase-auth.js'),
     import(firebaseSdk + 'firebase-firestore.js')
   ]);
-  const instance = app.initializeApp(cloudConfig.firebase);
+  const config = { ...cloudConfig.firebase };
+  if (location.hostname === "commentorchive.vercel.app") config.authDomain = location.hostname;
+  const instance = app.initializeApp(config);
   firebaseCloud = { auth, store, account: auth.getAuth(instance), db: store.getFirestore(instance) };
   return firebaseCloud;
 }

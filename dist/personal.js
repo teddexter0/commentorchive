@@ -89,6 +89,11 @@ async function refreshSession() {
   const button = $("#signIn");
   try {
     const { auth, account } = await connectFirebase();
+    auth.getRedirectResult(account).catch(caught => {
+      error.textContent = caught.message;
+      error.hidden = false;
+      if (!els.account.open) els.account.showModal();
+    });
     auth.onAuthStateChanged(account, async user => {
       state.session = user ? { user: { id: user.uid, email: user.email } } : null;
       await loadWorkspace();
@@ -100,7 +105,12 @@ async function refreshSession() {
       button.disabled = true;
       error.hidden = true;
       try {
-        await auth.signInWithPopup(account, new auth.GoogleAuthProvider());
+        const provider = new auth.GoogleAuthProvider();
+        if (location.hostname === "commentorchive.vercel.app") {
+          await auth.signInWithRedirect(account, provider);
+        } else {
+          await auth.signInWithPopup(account, provider);
+        }
       } catch (caught) {
         error.textContent = caught.message;
         error.hidden = false;
@@ -125,4 +135,4 @@ const exportBase=exportArchive;
 exportArchive=async function(){const payload={app:'Commentorchive',version:3,exportedAt:new Date().toISOString(),preferences,fragments:state.records};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='commentorchive-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};$('#exportData').onclick=exportArchive;
 const importBase=importArchive;
 importArchive=async function(file){if(!file)return;const raw=await file.text();let data;try{data=JSON.parse(raw);}catch{notify('That backup could not be read');return;}if(data.preferences?.pairs?.every(p=>p.length===2&&p.every(c=>/^#[a-f\d]{6}$/i.test(c)))&&Array.isArray(data.preferences.categories)){preferences=data.preferences;preferences.updatedAt=Date.now();localStorage.setItem(preferenceKey(),JSON.stringify(preferences));applyPreferences();}await importBase({text:async()=>raw});};$('#importData').onchange=e=>importArchive(e.target.files[0]);
-(async()=>{await loadWorkspace();await refreshSession();registerWebMcp();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=12').catch(()=>{});})();
+(async()=>{await loadWorkspace();await refreshSession();registerWebMcp();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=13').catch(()=>{});})();
