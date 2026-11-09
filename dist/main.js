@@ -50,8 +50,8 @@ function openDb() {
     request.onerror = () => reject(request.error);
   });
 }
-async function allRecords() { const db = await openDb(); return new Promise((resolve, reject) => { const request = db.transaction(STORE, "readonly").objectStore(STORE).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); }
-async function putRecord(record) { const db = await openDb(); return new Promise((resolve, reject) => { const request = db.transaction(STORE, "readwrite").objectStore(STORE).put(record); request.onsuccess = resolve; request.onerror = () => reject(request.error); }); }
+async function allRecords(owner) { const db = await openDb(owner); return new Promise((resolve, reject) => { const request = db.transaction(STORE, "readonly").objectStore(STORE).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); }
+async function putRecord(record, owner) { const db = await openDb(owner); return new Promise((resolve, reject) => { const request = db.transaction(STORE, "readwrite").objectStore(STORE).put(record); request.onsuccess = resolve; request.onerror = () => reject(request.error); }); }
 async function removeRecord(id) { const db = await openDb(); return new Promise((resolve, reject) => { const request = db.transaction(STORE, "readwrite").objectStore(STORE).delete(id); request.onsuccess = resolve; request.onerror = () => reject(request.error); }); }
 
 function escapeHtml(value = "") { return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
@@ -98,10 +98,44 @@ function normaliseRecord(record) {
   return { ...record, category: record.category || assigned?.[0] || inferred.category, subcategory: record.subcategory || assigned?.[1] || inferred.subcategory, bucket: record.bucket || "saved", tags, createdAt: Number(record.createdAt) || Date.now(), updatedAt: Number(record.updatedAt) || Date.now() };
 }
 
-function weekSeed() { const now = new Date(); const utc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()); return Math.floor((utc + 259200000) / 604800000); }
+function resurfacePeriod(cadence, date = new Date()) {
+  const day = Math.floor(date.getTime() / 86400000);
+  if (cadence === "daily") return day;
+  if (cadence === "monthly") return date.getUTCFullYear() * 12 + date.getUTCMonth();
+  return Math.floor((day + 3) / 7);
+}
 function seededScore(value) { let hash = 2166136261; for (const char of value) { hash ^= char.codePointAt(0); hash = Math.imul(hash, 16777619); } return hash >>> 0; }
-function weeklyRecords() { const seed = weekSeed(); return [...state.records].sort((a, b) => seededScore(`${seed}:${a.id}`) - seededScore(`${seed}:${b.id}`)).slice(0, 5); }
-function filteredRecords() { const q = state.query.trim().toLowerCase(); const weekly = new Set(weeklyRecords().map(record => record.id)); return state.records.filter(record => { const source = sourceDetails(record.url, Boolean(record.image)); const inView = state.view === "all" || state.view === "weekly" && weekly.has(record.id) || record.category === state.view; const inSub = !state.subcategory || record.subcategory === state.subcategory; const inSource = state.source === "all" || source.type === state.source; const haystack = [record.title, record.quote, record.note, record.relevance, record.resonance, record.content, record.url, record.sourceLabel, record.category, record.subcategory, ...(record.tags || [])].filter(Boolean).join(" ").toLowerCase(); return inView && inSub && inSource && (!q || haystack.includes(q)); }).sort((a, b) => state.newest ? b.createdAt - a.createdAt : a.createdAt - b.createdAt); }
+function resurfaceRecords(date) {
+  const eligible = state.records.filter(record => record.bucket === "saved")
+    .sort((a, b) => seededScore(a.id) - seededScore(b.id) || a.id.localeCompare(b.id));
+  const count = Math.min(5, eligible.length);
+  if (!count) return [];
+  const period = resurfacePeriod(preferences.resurfaceCadence, date);
+  const offset = ((period * count) % eligible.length + eligible.length) % eligible.length;
+  return Array.from({ length: count }, (_, index) => eligible[(offset + index) % eligible.length]);
+}
+
+function cardExcerpt(record) {
+  const text = (record.quote || record.content || "Saved for later").trim().replace(/\s+/g, " ");
+  const characters = Array.from(text);
+  if (characters.length <= 190) return text;
+  const prefix = characters.slice(0, 190).join("");
+  const lastSpace = prefix.lastIndexOf(" ");
+  return (lastSpace > 145 ? prefix.slice(0, lastSpace) : prefix) + "…";
+}
+
+function isUnsupportedSocialLink(url) {
+  const { hostname } = new URL(url);
+  return /(^|\.)(instagram\.com|x\.com|twitter\.com)$/.test(hostname);
+}
+
+function hasPrivateLinkCredentials(url) {
+  const { username, password, searchParams } = new URL(url);
+  return Boolean(username || password || [...searchParams.keys()].some(key =>
+    /^(access_token|auth_token|token|api_key|apikey|signature|sig|x-amz-signature|x-goog-signature)$/i.test(key)
+  ));
+}
+function filteredRecords() { const q = state.query.trim().toLowerCase(); const weekly = new Set(resurfaceRecords().map(record => record.id)); return state.records.filter(record => { const source = sourceDetails(record.url, Boolean(record.image)); const inView = state.view === "all" || state.view === "weekly" && weekly.has(record.id) || record.category === state.view; const inSub = !state.subcategory || record.subcategory === state.subcategory; const inSource = state.source === "all" || source.type === state.source; const haystack = [record.title, record.quote, record.note, record.relevance, record.resonance, record.content, record.url, record.sourceLabel, record.category, record.subcategory, ...(record.tags || [])].filter(Boolean).join(" ").toLowerCase(); return inView && inSub && inSource && (!q || haystack.includes(q)); }).sort((a, b) => state.newest ? b.createdAt - a.createdAt : a.createdAt - b.createdAt); }
 
 function renderNavigation() {
   $("#categoryNav").innerHTML = Object.entries(CATEGORIES).map(([key, config]) => { const count = state.records.filter(record => record.category === key).length; const childButtons = config.children.map(child => `<button class="subnav-item ${state.subcategory === child ? "active" : ""}" data-category="${key}" data-subcategory="${child}" type="button"><span>${titleCase(child)}</span><b>${state.records.filter(record => record.category === key && record.subcategory === child).length}</b></button>`).join(""); return `<div class="category-row ${state.view === key ? "open" : ""}"><button class="category-trigger ${state.view === key && !state.subcategory ? "active" : ""}" data-view="${key}" type="button"><span class="nav-symbol">${config.symbol}</span><span class="category-name">${config.label}</span><b>${count}</b><span class="category-caret">›</span></button><div class="subnav"><div>${childButtons}</div></div></div>`; }).join("");
@@ -139,8 +173,8 @@ async function showCommentExcerpt(card, record) {
 
 function render() {
   const records = filteredRecords();
-  els.grid.innerHTML = records.map(record => { const source = sourceDetails(record.url, Boolean(record.image)); const tags = record.tags.slice(0, 2).map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join(""); const image = record.image ? `<img class="card-image" src="${escapeHtml(record.image)}" alt="Saved screenshot" />` : ""; const note = record.relevance || record.note; return `<article class="fragment-card" data-id="${escapeHtml(record.id)}" tabindex="0"><div class="card-source"><span class="source-name">${record.url ? "↗ " : record.image ? "⌗ " : "— "}${escapeHtml(record.sourceLabel || source.label)}</span><span class="category-pill">${escapeHtml(record.category)} · ${escapeHtml(record.subcategory)}</span></div>${record.title ? `<h2 class="article-card-title">${escapeHtml(record.title)}</h2>` : ""}<span class="quote-mark">“</span><blockquote>${escapeHtml(record.quote || "Saved for later")}</blockquote>${note ? `<p class="card-note">${escapeHtml(note)}</p>` : ""}${record.resonance ? `<p class="resonance-line">“${escapeHtml(record.resonance)}”</p>` : ""}${image}<div class="card-bottom">${tags}<span class="card-date">${formatDate(record.createdAt)}</span></div></article>`; }).join("");
-  els.grid.hidden = records.length === 0; els.empty.hidden = records.length !== 0; els.count.textContent = `${records.length} ${records.length === 1 ? "item" : "items"}`; $("#allCount").textContent = state.records.length; const weeklyNode = $('[data-count="weekly"]'); if (weeklyNode) weeklyNode.textContent = weeklyRecords().length;
+  els.grid.innerHTML = records.map(record => { const source = sourceDetails(record.url, Boolean(record.image)); const tags = record.tags.slice(0, 2).map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join(""); const image = record.image ? `<img class="card-image" src="${escapeHtml(record.image)}" alt="Saved screenshot" />` : ""; const note = record.relevance || record.note; return `<article class="fragment-card" data-id="${escapeHtml(record.id)}" tabindex="0"><div class="card-source"><span class="source-name">${record.url ? "↗ " : record.image ? "⌗ " : "— "}${escapeHtml(record.sourceLabel || source.label)}</span><span class="category-pill">${escapeHtml(record.category)} · ${escapeHtml(record.subcategory)}</span></div>${record.title ? `<h2 class="article-card-title">${escapeHtml(record.title)}</h2>` : ""}<span class="quote-mark">“</span><blockquote>${escapeHtml(cardExcerpt(record))}</blockquote>${note ? `<p class="card-note">${escapeHtml(note)}</p>` : ""}${record.resonance ? `<p class="resonance-line">“${escapeHtml(record.resonance)}”</p>` : ""}${image}<div class="card-bottom">${tags}<span class="card-date">${formatDate(record.createdAt)}</span></div></article>`; }).join("");
+  els.grid.hidden = records.length === 0; els.empty.hidden = records.length !== 0; els.count.textContent = `${records.length} ${records.length === 1 ? "item" : "items"}`; $("#allCount").textContent = state.records.length; const weeklyNode = $('[data-count="weekly"]'); if (weeklyNode) weeklyNode.textContent = resurfaceRecords().length;
   if (!commentCardObserver && typeof IntersectionObserver === "function") {
     commentCardObserver = new IntersectionObserver(entries => {
       for (const entry of entries) {
@@ -198,7 +232,10 @@ async function readArticle(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 22000);
   try {
-    const response = await fetch(`https://r.jina.ai/${url}`, { signal: controller.signal, headers: { Accept: "text/plain" } });
+    const response = await fetch(`https://r.jina.ai/${url}`, {
+      signal: controller.signal, credentials: "omit", referrerPolicy: "no-referrer",
+      headers: { Accept: "text/plain" }
+    });
     if (!response.ok) throw new Error("Could not read source");
     const raw = (await response.text()).slice(0, 120000);
     const boundary = /^Markdown Content:[ \t]*\r?\n/im.exec(raw);
@@ -216,6 +253,15 @@ async function processLink(url, manualTags) {
   const sourceLabel = new URL(url).hostname.replace(/^www\./, "");
   const record = { id: crypto.randomUUID(), url, sourceLabel, tags: [...new Set(manualTags)].slice(0, 8), image: "", bucket: "saved", createdAt: Date.now(), updatedAt: Date.now() };
   if (isYouTubeCommentLink(url)) return normaliseRecord({ ...record, ...unreadLinkFields(url) });
+  if (isUnsupportedSocialLink(url)) {
+    return normaliseRecord({
+      ...record, ...unreadLinkFields(url),
+      quote: "Social link saved. Paste text or add a screenshot to capture its contents."
+    });
+  }
+  if (hasPrivateLinkCredentials(url)) {
+    return normaliseRecord({ ...record, ...unreadLinkFields(url), quote: "Link saved without automatic reading." });
+  }
 
   let article;
   try { article = await readArticle(url); }
@@ -231,18 +277,83 @@ async function processLink(url, manualTags) {
   });
 }
 async function fileToDataUrl(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); }
-async function readScreenshot(file, position, total) { let worker; try { if (!window.Tesseract?.createWorker) throw new Error("OCR unavailable"); worker = await Tesseract.createWorker("eng", 1, { workerPath: new URL("./ocr/worker.min.js", location.href).href, corePath: new URL("./ocr/tesseract-core-lstm.wasm.js", location.href).href, langPath: new URL("./ocr", location.href).href.replace(/\/$/, ""), gzip: true, logger(message) { const percent = Math.round((message.progress || 0) * 100); $("#ocrProgress").hidden = false; $("#ocrBar").style.width = `${percent}%`; $("#imageHelp").textContent = `Reading image ${position} of ${total} · ${percent}%`; } }); const result = await worker.recognize(file); return result?.data?.text?.replace(/\n{3,}/g, "\n\n").trim() || ""; } finally { if (worker) await worker.terminate(); } }
+async function readScreenshot(file, position, total) { const context = archiveContext(); let worker; try { if (!window.Tesseract?.createWorker) throw new Error("OCR unavailable"); worker = await Tesseract.createWorker("eng", 1, { workerPath: new URL("./ocr/worker.min.js", location.href).href, corePath: new URL("./ocr/tesseract-core-lstm.wasm.js", location.href).href, langPath: new URL("./ocr", location.href).href.replace(/\/$/, ""), gzip: true, logger(message) { if (!isCurrentArchive(context)) return; const percent = Math.round((message.progress || 0) * 100); $("#ocrProgress").hidden = false; $("#ocrBar").style.width = `${percent}%`; $("#imageHelp").textContent = `Reading image ${position} of ${total} · ${percent}%`; } }); const result = await worker.recognize(file); return result?.data?.text?.replace(/\n{3,}/g, "\n\n").trim() || ""; } finally { if (worker) await worker.terminate(); } }
 async function processImage(file, manualTags, position, total) { let text="", ocrFailed=false; try { text=await readScreenshot(file, position, total); } catch { ocrFailed=true; } const digest = text ? extractiveSummary(text) : "Screenshot saved. No clear text was detected."; const classification = classify(text || file.name); return normaliseRecord({ id: crypto.randomUUID(), title: file.name.replace(/\.[^.]+$/, ""), readError: ocrFailed, quote: digest, relevance: relevanceFor(classification.category, classification.subcategory, digest), resonance: text ? bestSentence(text) : "The image is preserved even when its words are not clear.", content: text, url: "", sourceLabel: "Screenshot", category: classification.category, subcategory: classification.subcategory, tags: [...new Set([...manualTags, ...autoTags(text)])].slice(0, 8), image: await fileToDataUrl(file), bucket: "saved", createdAt: Date.now(), updatedAt: Date.now() }); }
 async function processPlainText(text, manualTags) { const digest = extractiveSummary(text); const classification = classify(text); return normaliseRecord({ id: crypto.randomUUID(), title: "Saved text", quote: digest, relevance: relevanceFor(classification.category, classification.subcategory, digest), resonance: bestSentence(text), content: text.slice(0, 40000), url: "", sourceLabel: "Saved text", category: classification.category, subcategory: classification.subcategory, tags: [...new Set([...manualTags, ...autoTags(text)])].slice(0, 8), image: "", bucket: "saved", createdAt: Date.now(), updatedAt: Date.now() }); }
-async function saveCapture(event) { event.preventDefault(); const urls = parseLinks(els.links.value); if (els.links.value.trim() && !urls.length) { els.error.textContent="Enter a valid http:// or https:// link."; els.error.hidden=false; return; } if(state.files.some(file=>file.size>8388608 || !["image/png","image/jpeg","image/webp"].includes(file.type))) { els.error.textContent="Use PNG, JPEG, or WebP images up to 8 MB each."; els.error.hidden=false; return; } const plainText = els.text.value.trim(); const manualTags = els.tags.value.split(",").map(tag => tag.trim().replace(/^#/, "").toLowerCase()).filter(Boolean).slice(0, 8); if (!urls.length && !state.files.length && !plainText) { els.error.textContent = "Add at least one link, screenshot, or piece of text."; els.error.hidden = false; return; } els.error.hidden = true; els.save.disabled = true; els.save.textContent = "Working…"; els.queue.hidden = false; const saved = []; try { for (let index = 0; index < urls.length; index += 3) { const batch = urls.slice(index, index + 3); els.queue.innerHTML = `<p>Reading links ${index + 1}–${Math.min(index + batch.length, urls.length)} of ${urls.length}…</p>`; const records = await Promise.all(batch.map(url => processLink(url, manualTags))); for (const record of records) { await putRecord(record); saved.push(record); } } for (let index = 0; index < state.files.length; index++) { els.queue.innerHTML = `<p>Transcribing screenshot ${index + 1} of ${state.files.length}…</p>`; const record = await processImage(state.files[index], manualTags, index + 1, state.files.length); await putRecord(record); saved.push(record); } if (plainText) { els.queue.innerHTML = "<p>Digesting pasted text…</p>"; const record = await processPlainText(plainText, manualTags); await putRecord(record); saved.push(record); } if (state.session) { const owner = state.session.user.id; syncRecords(saved).catch(() => { if (state.session?.user.id === owner) $("#saveState").textContent = "Saved locally · sync pending"; }); } state.records = (await allRecords()).filter(r=>r.bucket!=="deleted").map(normaliseRecord); renderNavigation(); render(); closeCapture(); if (saved.length === 1 && isYouTubeCommentLink(saved[0].url)) openDetail(saved[0].id); const unreadLinks = saved.filter(record => record.url && record.readError && !isYouTubeCommentLink(record.url)).length; notify(unreadLinks ? `Saved ${saved.length}. ${unreadLinks === 1 ? "One link needs" : unreadLinks + " links need"} manual capture.` : `${saved.length} ${saved.length === 1 ? "item" : "items"} saved`); } catch (error) { els.error.textContent = error?.message || "Some items could not be processed. Anything completed is still saved."; els.error.hidden = false; } finally { els.save.disabled = false; els.save.textContent = "Digest & save"; } }
+async function saveCapture(event) {
+  event.preventDefault();
+  if (els.save.disabled) return;
+  const context = archiveContext();
+  const urls = parseLinks(els.links.value);
+  const files = [...state.files];
+  const plainText = els.text.value.trim();
+  const manualTags = els.tags.value.split(",").map(tag => tag.trim().replace(/^#/, "").toLowerCase()).filter(Boolean).slice(0, 8);
+  const error = urls.length === 0 && els.links.value.trim() ? "Enter a valid http:// or https:// link." :
+    files.some(file => file.size > 8388608 || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) ? "Use PNG, JPEG, or WebP images up to 8 MB each." :
+    !urls.length && !files.length && !plainText ? "Add at least one link, screenshot, or piece of text." : "";
+  els.error.hidden = !error;
+  if (error) {
+    els.error.textContent = error;
+    return;
+  }
+
+  els.save.disabled = true;
+  els.save.textContent = "Working.";
+  els.queue.hidden = false;
+  const saved = [];
+  try {
+    for (let index = 0; index < urls.length; index += 3) {
+      if (!isCurrentArchive(context)) return;
+      const batch = urls.slice(index, index + 3);
+      els.queue.innerHTML = `<p>Reading links ${index + 1}-${index + batch.length} of ${urls.length}.</p>`;
+      const records = await Promise.all(batch.map(url => processLink(url, manualTags)));
+      for (const record of records) {
+        await putRecord(record, context.owner);
+        saved.push(record);
+      }
+    }
+    for (let index = 0; index < files.length; index++) {
+      if (!isCurrentArchive(context)) return;
+      els.queue.innerHTML = `<p>Transcribing screenshot ${index + 1} of ${files.length}.</p>`;
+      const record = await processImage(files[index], manualTags, index + 1, files.length);
+      await putRecord(record, context.owner);
+      saved.push(record);
+    }
+    if (!isCurrentArchive(context)) return;
+    if (plainText) {
+      const record = await processPlainText(plainText, manualTags);
+      await putRecord(record, context.owner);
+      saved.push(record);
+    }
+    const records = await allRecords(context.owner);
+    if (!isCurrentArchive(context)) return;
+    state.records = records.filter(record => record.bucket !== "deleted" && record.id !== PREF_ID).map(normaliseRecord);
+    renderNavigation();
+    render();
+    closeCapture();
+    if (state.session) void syncAll().catch(() => {});
+    if (saved.length === 1 && isYouTubeCommentLink(saved[0].url)) openDetail(saved[0].id);
+    const unreadLinks = saved.filter(record => record.url && record.readError && !isYouTubeCommentLink(record.url)).length;
+    notify(unreadLinks ? `Saved ${saved.length}. ${unreadLinks === 1 ? "One link needs" : unreadLinks + " links need"} manual capture.` : `${saved.length} ${saved.length === 1 ? "item" : "items"} saved`);
+  } catch (caught) {
+    if (isCurrentArchive(context)) {
+      els.error.textContent = caught?.message || "Some items could not be processed. Anything completed is still saved.";
+      els.error.hidden = false;
+    }
+  } finally {
+    if (isCurrentArchive(context)) {
+      els.save.disabled = false;
+      els.save.textContent = "Digest & save";
+    }
+  }
+}
 
 function renderAccount() { const ready = cloudReady(); $("#accountSetup").hidden = ready; $("#accountFields").hidden = !ready || Boolean(state.session); $("#signedInPanel").hidden = !state.session; if (state.session) { $("#signedInEmail").textContent = state.session.user?.email || "your account"; $("#syncTitle").textContent = "Cloud sync"; $("#syncSubtitle").textContent = state.session.user?.email || "Cloud archive"; $("#syncOrb").classList.add("online"); } else { $("#syncTitle").textContent = ready ? "Cloud sync" : "This device"; $("#syncSubtitle").textContent = ready ? "Sign in across devices" : "Private local archive"; $("#syncOrb").classList.remove("online"); } }
 
 async function exportArchive() { const payload = { app: "Commentary Archive", version: 2, exportedAt: new Date().toISOString(), fragments: state.records }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `commentary-archive-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href); notify("Backup downloaded"); }
-async function importArchive(file) { try { const payload = JSON.parse(await file.text()); if (!Array.isArray(payload.fragments)) throw new Error(); const imported = []; for (const item of payload.fragments) { if (!item.id || !(item.quote || item.content)) continue; const record = normaliseRecord(item); await putRecord(record); imported.push(record); } if (state.session) await syncRecords(imported); state.records = (await allRecords()).filter(r=>r.bucket!=="deleted").map(normaliseRecord); els.data.close(); renderNavigation(); render(); notify(`${imported.length} items restored`); } catch { notify("That backup could not be read"); } }
+
 async function updateStorageLine() { if (!navigator.storage?.estimate) return; const { usage = 0, quota = 0 } = await navigator.storage.estimate(); $("#storageLine").textContent = `${(usage / 1024 / 1024).toFixed(1)} MB used · ${Math.round(quota / 1024 / 1024)} MB available on this device`; navigator.storage.persist?.(); }
 
-function registerWebMcp() { const context = document.modelContext; if (!context?.registerTool) return; try { context.registerTool({ name: "capture_fragment", title: "Capture a fragment", description: "Save text or a source link and automatically classify it.", inputSchema: { type: "object", properties: { text: { type: "string" }, url: { type: "string" }, tags: { type: "array", items: { type: "string" } } }, additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: true }, async execute(input) { const manualTags = Array.isArray(input?.tags) ? input.tags.slice(0, 8) : []; const record = input?.url ? await processLink(input.url, manualTags) : await processPlainText(input?.text || "", manualTags); await putRecord(record); if (state.session) await syncRecords([record]); state.records = (await allRecords()).filter(r=>r.bucket!=="deleted").map(normaliseRecord); renderNavigation(); render(); return { id: record.id, category: record.category, subcategory: record.subcategory, saved: true }; } }); context.registerTool({ name: "search_archive", title: "Search the archive", description: "Search saved ideas without changing them.", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true }, async execute(input) { const q = String(input.query).toLowerCase(); return { matches: state.records.filter(record => [record.title, record.quote, record.relevance, record.resonance, ...(record.tags || [])].join(" ").toLowerCase().includes(q)).slice(0, 20).map(record => ({ id: record.id, title: record.title, category: record.category, quote: record.quote })) }; } }); } catch { /* optional browser integration */ } }
 
 $$('[data-source]').forEach(button => button.onclick = () => { state.source = button.dataset.source; $$('[data-source]').forEach(item => item.classList.toggle("active", item === button)); render(); });
 $$('[data-mobile-view]').forEach(button => button.onclick = () => setView(button.dataset.mobileView));
@@ -259,7 +370,7 @@ $("#imageDrop").ondrop = event => { event.preventDefault(); event.currentTarget.
 [$("#openAccount"), $("#mobileAccount")].forEach(button => button.onclick = () => { els.more.close(); renderAccount(); els.account.showModal(); });
 $("#closeAccount").onclick = () => els.account.close();
 [$("#openData"), $("#mobileData")].forEach(button => button.onclick = () => { els.more.close(); updateStorageLine(); els.data.showModal(); });
-$("#closeData").onclick = () => els.data.close(); $("#exportData").onclick = exportArchive; $("#importData").onchange = event => importArchive(event.target.files[0]);
+$("#closeData").onclick = () => els.data.close(); $("#exportData").onclick = exportArchive; 
 $("#mobileMore").onclick = () => els.more.showModal(); $("#closeMore").onclick = () => els.more.close();
 document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); $("#searchInput").focus(); } if (event.key === "Escape" && els.capture.open) closeCapture(); });
 

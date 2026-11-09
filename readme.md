@@ -7,16 +7,17 @@ A private collection of comments, quotes, links and screenshots you want to revi
 ## Current features
 
 - Bulk capture up to 30 links, pasted text, and up to 20 PNG/JPEG/WebP screenshots (8 MB each).
-- On-device screenshot OCR. Original images survive OCR errors. Blocked articles retain their links; links are read through r.jina.ai.
-- Original text and images in the detail viewer; local extractive summaries.
+- Cards show short excerpts from pasted text and on-device screenshot OCR. Images keep their thumbnails and originals even when OCR cannot read them.
+- Public article URLs are sent to Jina Reader for extraction. Links with recognized credential parameters are saved without automatic reading.
 - Article links retain the captured paragraphs, original URL, and publication date when supplied by the reader. The installed Android web app can receive links from the share menu.
-- YouTube comment links open the exact public comment and available video and parent context when live lookup is configured. User-supplied copies can be saved on the same card for offline reference.
-- Favourites, archive/unarchive, editable tags, custom categories, search and weekly resurfacing.
+- **YouTube is the only supported live comment source.** Instagram and X links are bookmarks. Paste the text or add a screenshot to capture their contents.
+- YouTube cards show an excerpt and author. Opening one shows the exact public comment and available video and parent context. User-supplied copies can be saved on the same card for offline reference.
+- Favourites, archive/unarchive, editable tags, custom categories, search, and a daily, weekly, or monthly Resurface rotation. Resurface shows up to five active saves and excludes archived items.
 - Three independent background/text pairs: page, navigation, cards/dialogs. Save requires 4.5:1 text contrast.
 - Empty starts for new archives. The previous personal reading seed is no longer distributed to every visitor. Existing local data is preserved.
 - Separate IndexedDB workspaces for guest and each signed-in user. Guest content only enters an account through the explicit copy button.
 - Preferences and custom categories are stored per workspace; signed-in sync stores them as a private metadata row.
-- Timestamp-based cloud merge and deletion markers prevent stale records from replacing newer edits or reviving deletions.
+- Deletion requires confirmation. Timestamp-based cloud merge and deletion markers prevent stale records from replacing newer edits or reviving deletions.
 - JSON backup/restore. Local storage is browser/origin specific; export before changing browsers or hosting domains.
 
 ## Run and verify
