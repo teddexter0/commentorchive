@@ -31,7 +31,7 @@ openDetail = function(id) {
   detailBase(id);
 
   const commentLink = isYouTubeCommentLink(record.url);
-  $('#detailTags').textContent = visibleTags(record).map(tag => '#' + tag).join(' ');
+  $('#detailTags').innerHTML = visibleTags(record).map(tag => '<span>' + escapeHtml('#' + tag) + '</span>').join('');
   $('#detailMeta').textContent = categoryOf(record) + ' · ' + (record.sourceLabel || 'Saved text');
   const published = new Date(record.publishedAt || '');
   const articleContext = $('#articleContext');
@@ -46,9 +46,7 @@ openDetail = function(id) {
   $('#detailImage').src = record.image || '';
   $('#toggleFavourite').textContent = record.tags.includes('__favourite') ? '★ Favourited' : '☆ Favourite';
   $('#toggleArchive').textContent = record.bucket === 'archived' ? 'Unarchive' : 'Archive';
-  $('#editTags').value = visibleTags(record).join(', ');
-  fillCategories();
-  $('#editCategory').value = categoryOf(record);
+  closeDetailsEditor();
   $('#deleteRecord').hidden = false;
   $('#commentCopy').hidden = !commentLink;
   $('#commentCopy').open = false;
@@ -109,6 +107,9 @@ async function persistEdit(record) {
   record.updatedAt = Date.now();
   await putRecord(record, context.owner);
   if (!isCurrentArchive(context)) return false;
+  const index = state.records.findIndex(item => item.id === record.id);
+  if (index < 0) return false;
+  state.records[index] = record;
   renderNavigation();
   render();
   if (state.session) void syncAll().catch(() => {});
@@ -117,7 +118,58 @@ async function persistEdit(record) {
 $('#toggleFavourite').onclick=async()=>{const r=state.records.find(r=>r.id===state.currentId);r.tags=r.tags.includes('__favourite')?r.tags.filter(t=>t!=='__favourite'):[...r.tags,'__favourite'];if(await persistEdit(r))openDetailRefresh();};
 $('#toggleArchive').onclick=async()=>{const r=state.records.find(r=>r.id===state.currentId);r.bucket=r.bucket==='archived'?'saved':'archived';if(await persistEdit(r))openDetailRefresh();};
 function openDetailRefresh(){els.detail.close();openDetail(state.currentId);}
-$('#saveDetails').onclick=async()=>{const r=state.records.find(r=>r.id===state.currentId);r.tags=[...r.tags.filter(t=>t.startsWith('__')&&!t.startsWith('__category:')),...$('#editTags').value.split(',').map(t=>t.trim().replace(/^#+/,'')).filter(t=>t&&!t.startsWith('__')).slice(0,12),'__category:'+$('#editCategory').value];if(await persistEdit(r))openDetailRefresh();notify('Changes saved');};
+const detailsEditor = $('#detailsEditor');
+const editTagsInput = $('#editTags');
+const saveDetailsButton = $('#saveDetails');
+const detailsEditError = $('#detailsEditError');
+bindTagInput(editTagsInput);
+
+function closeDetailsEditor() {
+  detailsEditor.hidden = true;
+  $('#editDetails').setAttribute('aria-expanded', 'false');
+}
+
+function openDetailsEditor() {
+  const record = state.records.find(item => item.id === state.currentId);
+  if (!record) return;
+  editTagsInput.value = visibleTags(record).map(tag => '#' + tag.replace(/^#+/, '')).join(', ');
+  fillCategories();
+  $('#editCategory').value = categoryOf(record);
+  detailsEditError.hidden = true;
+  detailsEditor.hidden = false;
+  $('#editDetails').setAttribute('aria-expanded', 'true');
+  editTagsInput.focus();
+}
+
+$('#editDetails').onclick = openDetailsEditor;
+$('#cancelDetails').onclick = () => {
+  closeDetailsEditor();
+  $('#editDetails').focus();
+};
+detailsEditor.onsubmit = async event => {
+  event.preventDefault();
+  const record = state.records.find(item => item.id === state.currentId);
+  if (!record || saveDetailsButton.disabled) return;
+  const category = $('#editCategory').value;
+  const tags = record.tags.filter(tag => tag.startsWith('__') && !tag.startsWith('__category:'));
+  tags.push(...parseTags(editTagsInput.value, 12), '__category:' + category);
+  saveDetailsButton.disabled = true;
+  detailsEditError.hidden = true;
+  try {
+    if (await persistEdit({ ...record, tags }) && state.currentId === record.id && els.detail.open) {
+      openDetailRefresh();
+      $('#editDetails').focus();
+      notify('Changes saved');
+    }
+  } catch {
+    if (state.currentId === record.id) {
+      detailsEditError.textContent = 'Could not save the changes. Try again.';
+      detailsEditError.hidden = false;
+    }
+  } finally {
+    saveDetailsButton.disabled = false;
+  }
+};
 for(const name of ['processLink','processImage','processPlainText']){const original=({processLink,processImage,processPlainText})[name];const wrapped=async(...args)=>{const category=$('#captureCategory').value;const record=await original(...args);if(category)record.tags.push('__category:'+category);return record;};if(name==='processLink')processLink=wrapped;if(name==='processImage')processImage=wrapped;if(name==='processPlainText')processPlainText=wrapped;}
 function luminance(hex){const rgb=hex.slice(1).match(/../g).map(n=>parseInt(n,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;}
 function contrast(a,b){const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
@@ -347,4 +399,4 @@ $('#importData').onchange = event => restoreArchive(event.target.files[0]);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && state.view === 'weekly') render();
 });
-(async()=>{await loadWorkspace();await refreshSession();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=18').catch(()=>{});openSharedCapture();})();
+(async()=>{await loadWorkspace();await refreshSession();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=19').catch(()=>{});openSharedCapture();})();

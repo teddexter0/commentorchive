@@ -45,3 +45,13 @@ html,body,.workspace{background:var(--layer0-bg);color:var(--layer0-fg)}
 .colour-pair{margin:16px 0;padding:12px;border:1px solid currentColor;border-radius:12px;display:flex;gap:20px}.colour-pair label{display:grid;gap:8px;flex:1}.colour-pair input[type=color]{height:42px;padding:3px;cursor:pointer}
 .personal-actions{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.detail-image{max-width:100%;max-height:60vh;object-fit:contain;border-radius:12px}.original-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:45vh;overflow:auto}.favourite-mark{font-size:1.25rem;color:inherit}.more-grid{gap:12px}.sidebar-foot .quiet-button{color:inherit}button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid #4285f4;outline-offset:3px}
 @media(max-width:760px){.personal-actions button{flex:1}.colour-pair{gap:12px}.modal-actions{flex-wrap:wrap}}
+.edit-button{min-height:43px;padding:0 16px;border:1px solid #0f766e;border-radius:12px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer}
+.edit-button:hover{background:#115e59;border-color:#115e59}
+.edit-button:disabled{opacity:.6;cursor:wait}
+.card-edit{min-height:34px;padding:0 12px;margin-left:4px}
+.card-bottom,.detail-tags{flex-wrap:wrap}
+.tag,.detail-tags span{overflow-wrap:anywhere}
+.card-date{align-self:center}
+.details-editor{margin:0 0 20px;padding:16px;border:1px solid #0f766e;border-radius:14px}
+.editor-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
+.tag-field small,.details-editor small{font-size:.8rem;opacity:.8}

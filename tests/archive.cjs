@@ -17,6 +17,17 @@ for(const name of ['app.js','firebase-cloud.js','main.js','personal.js']){let so
   state.view='favourites';assert(filteredRecords().length===1,'favourites filter');
   state.view='category:Comedy';assert(filteredRecords().length===1,'custom category');
   assert(visibleTags(state.records[0]).join(',')==='funny','internal markers hidden');
+  assert(formatTagInput('funny, book notes; #design')==='#funny, #book notes; #design','typing or pasting prefixes each tag');
+  assert(parseTags('#Funny #books, funny; #book notes, #__favourite',12).join('|')==='Funny|books|book notes','multiple tags support separators and skip duplicates and internal markers');
+  openDetail('alice-item');
+  assert($('#detailsEditor').hidden,'edit fields are hidden until Edit is pressed');
+  $('#editDetails').onclick();
+  assert(!$('#detailsEditor').hidden&&$('#editTags').value==='#funny','Edit opens a field with existing hashtags');
+  $('#editTags').value='#funny, books; #ideas';
+  await $('#detailsEditor').onsubmit({preventDefault(){}});
+  assert($('#detailsEditor').hidden&&visibleTags(state.records[0]).join(',')==='funny,books,ideas','saving edit keeps multiple tags on the item');
+  assert(state.records[0].tags.includes('__favourite')&&categoryOf(state.records[0])==='Comedy','editing tags preserves favorite and category');
+  els.detail.close();
   state.records[0].bucket='archived';state.view='all';assert(filteredRecords().length===0,'archived excluded from main');
   state.view='archived';assert(filteredRecords().length===1,'archive filter');
   assert(safeUrl('javascript:alert(1)')==='','unsafe link blocked');

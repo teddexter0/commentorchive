@@ -124,6 +124,41 @@ function cardExcerpt(record) {
   return (lastSpace > 145 ? prefix.slice(0, lastSpace) : prefix) + "…";
 }
 
+function parseTags(value, limit) {
+  const tags = new Map();
+  for (const part of value.split(/[,;\n]+|\s+(?=#+\S)/)) {
+    const tag = part.trim().replace(/^#+/, "").trim();
+    if (tag && !tag.startsWith("__") && !tags.has(tag.toLowerCase())) tags.set(tag.toLowerCase(), tag);
+  }
+  return [...tags.values()].slice(0, limit);
+}
+
+function formatTagInput(value) {
+  return value.replace(/(^|[,;])(\s*)(?=[^,;\s#])/g, "$1$2#");
+}
+
+function bindTagInput(input) {
+  const format = event => {
+    if (event.isComposing) return;
+    const { value, selectionStart, selectionEnd } = input;
+    const formatted = formatTagInput(value);
+    if (value === formatted) return;
+    input.value = formatted;
+    input.setSelectionRange(formatTagInput(value.slice(0, selectionStart)).length,
+      formatTagInput(value.slice(0, selectionEnd)).length);
+  };
+  input.addEventListener("input", format);
+  input.addEventListener("compositionend", format);
+  input.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || event.isComposing) return;
+    event.preventDefault();
+    if (input.value.trim() && !/[,;]\s*$/.test(input.value)) {
+      input.value = input.value.trimEnd() + ", ";
+    }
+  });
+}
+bindTagInput(els.tags);
+
 function isUnsupportedSocialLink(url) {
   const { hostname } = new URL(url);
   return /(^|\.)(instagram\.com|x\.com|twitter\.com)$/.test(hostname);
@@ -173,7 +208,7 @@ async function showCommentExcerpt(card, record) {
 
 function render() {
   const records = filteredRecords();
-  els.grid.innerHTML = records.map(record => { const source = sourceDetails(record.url, Boolean(record.image)); const tags = record.tags.slice(0, 2).map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join(""); const image = record.image ? `<img class="card-image" src="${escapeHtml(record.image)}" alt="Saved screenshot" />` : ""; const note = record.relevance || record.note; return `<article class="fragment-card" data-id="${escapeHtml(record.id)}" tabindex="0"><div class="card-source"><span class="source-name">${record.url ? "↗ " : record.image ? "⌗ " : "— "}${escapeHtml(record.sourceLabel || source.label)}</span><span class="category-pill">${escapeHtml(record.category)} · ${escapeHtml(record.subcategory)}</span></div>${record.title ? `<h2 class="article-card-title">${escapeHtml(record.title)}</h2>` : ""}<span class="quote-mark">“</span><blockquote>${escapeHtml(cardExcerpt(record))}</blockquote>${note ? `<p class="card-note">${escapeHtml(note)}</p>` : ""}${record.resonance ? `<p class="resonance-line">“${escapeHtml(record.resonance)}”</p>` : ""}${image}<div class="card-bottom">${tags}<span class="card-date">${formatDate(record.createdAt)}</span></div></article>`; }).join("");
+  els.grid.innerHTML = records.map(record => { const source = sourceDetails(record.url, Boolean(record.image)); const tags = record.tags.slice(0, 2).map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join(""); const image = record.image ? `<img class="card-image" src="${escapeHtml(record.image)}" alt="Saved screenshot" />` : ""; const note = record.relevance || record.note; return `<article class="fragment-card" data-id="${escapeHtml(record.id)}" tabindex="0"><div class="card-source"><span class="source-name">${record.url ? "↗ " : record.image ? "⌗ " : "— "}${escapeHtml(record.sourceLabel || source.label)}</span><span class="category-pill">${escapeHtml(record.category)} · ${escapeHtml(record.subcategory)}</span></div>${record.title ? `<h2 class="article-card-title">${escapeHtml(record.title)}</h2>` : ""}<span class="quote-mark">“</span><blockquote>${escapeHtml(cardExcerpt(record))}</blockquote>${note ? `<p class="card-note">${escapeHtml(note)}</p>` : ""}${record.resonance ? `<p class="resonance-line">“${escapeHtml(record.resonance)}”</p>` : ""}${image}<div class="card-bottom">${tags}<span class="card-date">${formatDate(record.createdAt)}</span><button class="edit-button card-edit" type="button" aria-label="Edit saved item">Edit</button></div></article>`; }).join("");
   els.grid.hidden = records.length === 0; els.empty.hidden = records.length !== 0; els.count.textContent = `${records.length} ${records.length === 1 ? "item" : "items"}`; $("#allCount").textContent = state.records.length; const weeklyNode = $('[data-count="weekly"]'); if (weeklyNode) weeklyNode.textContent = resurfaceRecords().length;
   if (!commentCardObserver && typeof IntersectionObserver === "function") {
     commentCardObserver = new IntersectionObserver(entries => {
@@ -191,7 +226,12 @@ function render() {
   $$(".fragment-card").forEach(card => {
     card.onclick = () => openDetail(card.dataset.id);
     card.onkeydown = event => {
-      if (["Enter", " "].includes(event.key)) { event.preventDefault(); openDetail(card.dataset.id); }
+      if (event.target === card && ["Enter", " "].includes(event.key)) { event.preventDefault(); openDetail(card.dataset.id); }
+    };
+    card.querySelector(".card-edit").onclick = event => {
+      event.stopPropagation();
+      openDetail(card.dataset.id);
+      openDetailsEditor();
     };
     const record = recordsById.get(card.dataset.id);
     if (!record?.readError || record.commentCopy || !isYouTubeCommentLink(record.url)) return;
@@ -287,7 +327,7 @@ async function saveCapture(event) {
   const urls = parseLinks(els.links.value);
   const files = [...state.files];
   const plainText = els.text.value.trim();
-  const manualTags = els.tags.value.split(",").map(tag => tag.trim().replace(/^#/, "").toLowerCase()).filter(Boolean).slice(0, 8);
+  const manualTags = parseTags(els.tags.value, 8).map(tag => tag.toLowerCase());
   const error = urls.length === 0 && els.links.value.trim() ? "Enter a valid http:// or https:// link." :
     files.some(file => file.size > 8388608 || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) ? "Use PNG, JPEG, or WebP images up to 8 MB each." :
     !urls.length && !files.length && !plainText ? "Add at least one link, screenshot, or piece of text." : "";
@@ -370,7 +410,7 @@ $("#imageDrop").ondrop = event => { event.preventDefault(); event.currentTarget.
 [$("#openAccount"), $("#mobileAccount")].forEach(button => button.onclick = () => { els.more.close(); renderAccount(); els.account.showModal(); });
 $("#closeAccount").onclick = () => els.account.close();
 [$("#openData"), $("#mobileData")].forEach(button => button.onclick = () => { els.more.close(); updateStorageLine(); els.data.showModal(); });
-$("#closeData").onclick = () => els.data.close(); $("#exportData").onclick = exportArchive; 
+$("#closeData").onclick = () => els.data.close(); $("#exportData").onclick = exportArchive;
 $("#mobileMore").onclick = () => els.more.showModal(); $("#closeMore").onclick = () => els.more.close();
 document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); $("#searchInput").focus(); } if (event.key === "Escape" && els.capture.open) closeCapture(); });
 
