@@ -1,12 +1,16 @@
 # Commentorchive
 
+[Open the live app](https://commentorchive.vercel.app/)
+
 A private collection of comments, quotes, links and screenshots you want to revisit. Capture, organise and retrieve; no public feed or social graph.
 
 ## Current features
 
 - Bulk capture up to 30 links, pasted text, and up to 20 PNG/JPEG/WebP screenshots (8 MB each).
 - On-device screenshot OCR. Original images survive OCR errors. Blocked articles retain their links; links are read through r.jina.ai.
-- Original text and images in the detail viewer; optional local summarisation with extractive fallback.
+- Original text and images in the detail viewer; local extractive summaries.
+- Article links retain the captured paragraphs, original URL, and publication date when supplied by the reader. The installed Android web app can receive links from the share menu.
+- YouTube comment links open the exact public comment and available video and parent context when live lookup is configured. User-supplied copies can be saved on the same card for offline reference.
 - Favourites, archive/unarchive, editable tags, custom categories, search and weekly resurfacing.
 - Three independent background/text pairs: page, navigation, cards/dialogs. Save requires 4.5:1 text contrast.
 - Empty starts for new archives. The previous personal reading seed is no longer distributed to every visitor. Existing local data is preserved.
@@ -31,8 +35,8 @@ After signing in, use **Copy this device’s guest archive into my account** to 
 
 ## Deployment
 
-`vercel.json` serves `dist` without a build step. The current release was deployed directly through Vercel because GitHub writes returned HTTP 403. GitHub still has the older source until write access is restored. A complete local release snapshot is committed under `.sites-runtime/release-20261030`. The original Sites identity is preserved in `.openai/hosting.json`; a new hosting origin has separate browser storage, so use JSON export/import to move a local archive.
+`vercel.json` serves `dist` and runs the live YouTube lookup from `api/youtube-comment.js`. Enable YouTube Data API v3 and set a server-side `YOUTUBE_DATA_API_KEY` restricted to that API on the Vercel project. Lookup results are displayed live and excluded from archive storage and the service worker cache. The original Sites identity is preserved in `.openai/hosting.json`. A new hosting origin has separate browser storage, so use JSON export/import to move a local archive.
 
 MIT licensed.
 
-Current production: https://commentorchive.vercel.app (Vercel deployment protection uses the team defaults). The original Sites URL still serves its previous version.
+The live app is hosted at https://commentorchive.vercel.app. The original ChatGPT Sites deployment is a separate archive origin. Use JSON export and import if you want to move records stored on that device to the live app.

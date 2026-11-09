@@ -18,8 +18,88 @@ setView = function(view,subcategory=''){state.view=view;state.subcategory=subcat
 filteredRecords = function(){const q=state.query.trim().toLowerCase(),weekly=new Set(weeklyRecords().map(r=>r.id));return state.records.filter(r=>{const archived=r.bucket==='archived';const inView=state.view==='archived'?archived:!archived&&(state.view==='all'||state.view==='favourites'&&r.tags.includes('__favourite')||state.view==='weekly'&&weekly.has(r.id)||state.view==='category:'+categoryOf(r));const hay=[r.title,r.quote,r.content,r.note,r.url,categoryOf(r),...visibleTags(r)].join(' ').toLowerCase();return inView&&(state.source==='all'||sourceDetails(r.url,Boolean(r.image||r.imagePath)).type===state.source)&&(!q||hay.includes(q));}).sort((a,b)=>state.newest?b.createdAt-a.createdAt:a.createdAt-b.createdAt);};
 const renderBase=render;
 render=function(){renderBase();$$('.fragment-card').forEach(card=>{const r=state.records.find(r=>r.id===card.dataset.id);card.querySelector('.category-pill').textContent=categoryOf(r);card.querySelectorAll('.tag').forEach(t=>t.remove());const footer=card.querySelector('.card-bottom');visibleTags(r).slice(0,3).reverse().forEach(tag=>{const el=document.createElement('span');el.className='tag';el.textContent='#'+tag;footer.prepend(el);});if(r.tags.includes('__favourite')){const badge=document.createElement('span');badge.className='favourite-mark';badge.textContent='★';badge.setAttribute('aria-label','Favourite');footer.prepend(badge);}});};
-const detailBase=openDetail;
-openDetail=function(id){detailBase(id);const r=state.records.find(r=>r.id===id);$('#detailTags').textContent=visibleTags(r).map(t=>'#'+t).join(' ');$('#detailMeta').textContent=categoryOf(r)+' · '+(r.sourceLabel||'Saved text');$('#originalText').textContent=r.content||r.quote;$('#detailImage').hidden=!r.image;$('#detailImage').src=r.image||'';$('#toggleFavourite').textContent=r.tags.includes('__favourite')?'★ Favourited':'☆ Favourite';$('#toggleArchive').textContent=r.bucket==='archived'?'Unarchive':'Archive';$('#editTags').value=visibleTags(r).join(', ');fillCategories();$('#editCategory').value=categoryOf(r);$('#deleteRecord').hidden=false;};
+const detailBase = openDetail;
+let youtubeLookup;
+
+openDetail = function(id) {
+  const record = state.records.find(item => item.id === id);
+  if (!record) return;
+  detailBase(id);
+
+  const commentLink = isYouTubeCommentLink(record.url);
+  $('#detailTags').textContent = visibleTags(record).map(tag => '#' + tag).join(' ');
+  $('#detailMeta').textContent = categoryOf(record) + ' · ' + (record.sourceLabel || 'Saved text');
+  const published = new Date(record.publishedAt || '');
+  const articleContext = $('#articleContext');
+  articleContext.hidden = !record.articleSnapshot;
+  articleContext.textContent = record.articleSnapshot
+    ? [Number.isNaN(published.valueOf()) ? '' : 'Published ' + published.toLocaleDateString(), 'Captured ' + new Date(record.createdAt).toLocaleDateString()].filter(Boolean).join(' · ')
+    : '';
+  $('#originalSection').hidden = Boolean(record.url && record.readError);
+  $('#originalLabel').textContent = record.articleSnapshot ? 'Captured article text' : record.commentCopy ? 'Saved comment text' : 'Original text';
+  $('#originalText').textContent = record.content || record.quote;
+  $('#detailImage').hidden = !record.image;
+  $('#detailImage').src = record.image || '';
+  $('#toggleFavourite').textContent = record.tags.includes('__favourite') ? '★ Favourited' : '☆ Favourite';
+  $('#toggleArchive').textContent = record.bucket === 'archived' ? 'Unarchive' : 'Archive';
+  $('#editTags').value = visibleTags(record).join(', ');
+  fillCategories();
+  $('#editCategory').value = categoryOf(record);
+  $('#deleteRecord').hidden = false;
+  $('#commentCopy').hidden = !commentLink;
+  $('#commentCopy').open = false;
+  $('#commentCopyText').value = record.commentCopy ? record.content : '';
+  youtubeLookup?.abort();
+  $('#youtubeContext').hidden = !commentLink;
+  if (commentLink) loadYouTubeContext(record);
+};
+
+async function loadYouTubeContext(record) {
+  const lookup = new AbortController();
+  youtubeLookup = lookup;
+  $('#youtubeVideo').textContent = 'Loading the linked comment…';
+  for (const id of ['youtubeAuthor', 'youtubeText', 'youtubeParent', 'youtubeDescription']) $('#' + id).textContent = '';
+  $('#youtubeDescriptionSection').hidden = true;
+
+  try {
+    const ids = youtubeCommentIds(record.url);
+    if (!ids) throw new Error('This link does not contain a readable video and comment ID.');
+    const response = await fetch('./api/youtube-comment?' + new URLSearchParams(ids), {
+      signal: AbortSignal.any([lookup.signal, AbortSignal.timeout(15000)]), cache: 'no-store'
+    });
+    if (response.status === 404) throw new Error('YouTube no longer returns this comment.');
+    if (!response.ok) throw new Error('Live comment lookup is unavailable. You can still open the source or save a copy here.');
+    const { comment, parent, video } = await response.json();
+    if (lookup.signal.aborted || state.currentId !== record.id) return;
+    $('#youtubeVideo').textContent = [video?.title, video?.channel].filter(Boolean).join(' · ');
+    const posted = new Date(comment.publishedAt || '');
+    $('#youtubeAuthor').textContent = [comment.author, Number.isNaN(posted.valueOf()) ? '' : posted.toLocaleDateString()].filter(Boolean).join(' · ');
+    $('#youtubeText').textContent = comment.text;
+    $('#youtubeParent').textContent = parent ? 'In reply to ' + (parent.author || 'the parent comment') + '\n' + parent.text : '';
+    $('#youtubeDescription').textContent = video?.description || '';
+    $('#youtubeDescriptionSection').hidden = !video?.description;
+    if (!record.commentCopy) $('#detailThesis').textContent = 'Original comment link saved. The text below is live from YouTube.';
+  } catch (error) {
+    if (lookup.signal.aborted || state.currentId !== record.id) return;
+    $('#youtubeVideo').textContent = error instanceof Error && error.name === 'Error'
+      ? error.message : 'Live comment lookup timed out or is offline.';
+    if (!record.commentCopy) $('#detailThesis').textContent = 'Original comment link saved.';
+  }
+}
+
+$('#saveCommentCopy').onclick = async () => {
+  const record = state.records.find(item => item.id === state.currentId);
+  const text = $('#commentCopyText').value.trim();
+  if (!record || !text || !isYouTubeCommentLink(record.url)) return;
+  const classification = classify(text);
+  const updated = { ...record, title: 'YouTube comment', quote: text, content: text, commentCopy: true,
+    readError: false, resonance: '', relevance: '', ...classification };
+  Object.assign(record, updated);
+  await persistEdit(record);
+  if (state.currentId !== record.id || !els.detail.open) return;
+  openDetailRefresh();
+  notify('Comment text saved on this card');
+};
 async function persistEdit(r){r.updatedAt=Date.now();await putRecord(r);renderNavigation();render();if(state.session){try{await syncRecords([r]);$('#saveState').textContent='Synced';}catch{$('#saveState').textContent='Saved locally · sync pending';notify('Saved on this device. Cloud sync needs a retry.');}}}
 $('#toggleFavourite').onclick=async()=>{const r=state.records.find(r=>r.id===state.currentId);r.tags=r.tags.includes('__favourite')?r.tags.filter(t=>t!=='__favourite'):[...r.tags,'__favourite'];await persistEdit(r);openDetailRefresh();};
 $('#toggleArchive').onclick=async()=>{const r=state.records.find(r=>r.id===state.currentId);r.bucket=r.bucket==='archived'?'saved':'archived';await persistEdit(r);openDetailRefresh();};
@@ -135,4 +215,4 @@ const exportBase=exportArchive;
 exportArchive=async function(){const payload={app:'Commentorchive',version:3,exportedAt:new Date().toISOString(),preferences,fragments:state.records};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='commentorchive-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};$('#exportData').onclick=exportArchive;
 const importBase=importArchive;
 importArchive=async function(file){if(!file)return;const raw=await file.text();let data;try{data=JSON.parse(raw);}catch{notify('That backup could not be read');return;}if(data.preferences?.pairs?.every(p=>p.length===2&&p.every(c=>/^#[a-f\d]{6}$/i.test(c)))&&Array.isArray(data.preferences.categories)){preferences=data.preferences;preferences.updatedAt=Date.now();localStorage.setItem(preferenceKey(),JSON.stringify(preferences));applyPreferences();}await importBase({text:async()=>raw});};$('#importData').onchange=e=>importArchive(e.target.files[0]);
-(async()=>{await loadWorkspace();await refreshSession();registerWebMcp();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=13').catch(()=>{});})();
+(async()=>{await loadWorkspace();await refreshSession();registerWebMcp();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=16').catch(()=>{});openSharedCapture();})();
