@@ -1,5 +1,5 @@
-const CACHE = "commentorchive-v16";
-const ASSETS = ["./", "./index.html", "./styles.css?v=16", "./config.js?v=16", "./app.js?v=16", "./firebase-cloud.js?v=16", "./main.js?v=16", "./personal.js?v=16", "./ocr/tesseract.min.js?v=16", "./manifest.webmanifest", "./favicon.svg"];
+const CACHE = "commentorchive-v17";
+const ASSETS = ["./", "./index.html", "./styles.css?v=17", "./config.js?v=17", "./app.js?v=17", "./firebase-cloud.js?v=17", "./main.js?v=17", "./personal.js?v=17", "./ocr/tesseract.min.js?v=17", "./manifest.webmanifest", "./favicon.svg"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith("commentorchive-") && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener("fetch", e => {

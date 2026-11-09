@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'method' });
   }
 
-  const { commentId, videoId } = req.query;
+  const { commentId, videoId, view } = req.query;
   if (typeof commentId !== 'string' || typeof videoId !== 'string' || !COMMENT_ID.test(commentId) || !VIDEO_ID.test(videoId)) {
     return res.status(400).json({ error: 'invalid-link' });
   }
@@ -35,6 +35,13 @@ module.exports = async function handler(req, res) {
     const comment = commentDetails(snippet);
     if (!comment || (snippet.videoId && snippet.videoId !== videoId)) {
       return res.status(404).json({ error: 'comment-unavailable' });
+    }
+    if (view === 'excerpt') {
+      const text = comment.text.trim().replace(/\s+/g, ' ');
+      const prefix = text.slice(0, 170);
+      const lastSpace = prefix.lastIndexOf(' ');
+      const excerpt = text.length <= 170 ? text : (lastSpace > 125 ? prefix.slice(0, lastSpace) : prefix) + '…';
+      return res.status(200).json({ excerpt, author: comment.author });
     }
 
     const [videos, parents] = await Promise.all([

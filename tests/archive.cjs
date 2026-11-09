@@ -51,6 +51,19 @@ for(const name of ['app.js','firebase-cloud.js','main.js','personal.js']){let so
   await loadYouTubeContext(legacy);
   assert($('#youtubeText').textContent==='Exact public comment'&&$('#youtubeVideo').textContent.includes('The Short')&&$('#youtubeParent').textContent.includes('Original thread text'),'exact comment and its context appear in the card');
   assert(!legacy.content,'live API data stays out of the saved record');
+  const snippetNodes={blockquote:{},'.article-card-title':{}};
+  const visibleCard={isConnected:true,querySelector:selector=>snippetNodes[selector]};
+  let excerptCalls=0;
+  const detailFetch=globalThis.fetch;
+  globalThis.fetch=async url=>{
+    excerptCalls++;
+    assert(url.includes('view=excerpt'),'cards request only a short excerpt');
+    return {ok:true,json:async()=>({excerpt:'A short public excerpt…',author:'@Author'})};
+  };
+  await Promise.all([showCommentExcerpt(visibleCard,legacy),showCommentExcerpt(visibleCard,legacy)]);
+  assert(excerptCalls===1&&snippetNodes.blockquote.textContent==='A short public excerpt…'&&snippetNodes['.article-card-title'].textContent==='Comment by @Author','existing cards display the excerpt and reuse an in-flight request');
+  assert(!legacy.content&&!legacy.quote.includes('short public excerpt'),'card excerpt stays out of the saved archive');
+  globalThis.fetch=detailFetch;
   const originalSyncRecords=syncRecords;
   window.Summarizer={availability:()=>new Promise(()=>{})};
   syncRecords=()=>new Promise(()=>{});
@@ -111,6 +124,17 @@ try {
   assert.equal(body.comment.text,'Exact reply');
   assert.equal(body.parent.text,'The parent');
   assert.equal(body.video.title,'The Short');
+  let excerptCalls=0;
+  global.fetch=async url=>{
+    excerptCalls++;
+    assert.equal(url.pathname,'/youtube/v3/comments');
+    return {ok:true,json:async()=>({items:[{id:commentId,snippet:{textDisplay:'An original sentence. '.repeat(15),authorDisplayName:'@Author',parentId}}]})};
+  };
+  await handler({...request,query:{...request.query,view:'excerpt'}},res);
+  assert.equal(status,200);
+  assert.equal(excerptCalls,1);
+  assert.equal(body.author,'@Author');
+  assert.ok(body.excerpt.length<=171&&body.excerpt.endsWith('…'));
   global.fetch=async()=>({ok:true,json:async()=>({items:[{id:parentId,snippet:{textDisplay:'Wrong comment'}}]})});
   await handler(request,res);
   assert.equal(status,404);

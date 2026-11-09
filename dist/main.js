@@ -111,11 +111,59 @@ function renderNavigation() {
 function bindNavigation() { $$('[data-view]').forEach(button => button.onclick = () => setView(button.dataset.view)); $$('[data-subcategory]').forEach(button => button.onclick = event => { event.stopPropagation(); setView(button.dataset.category, button.dataset.subcategory); }); $$('[data-more-view]').forEach(button => button.onclick = () => { els.more.close(); setView(button.dataset.moreView); }); $$('[data-more-sub]').forEach(button => button.onclick = () => { els.more.close(); setView(button.dataset.moreCategory, button.dataset.moreSub); }); }
 function setView(view, subcategory = "") { state.view = view; state.subcategory = subcategory; state.source = "all"; $$('[data-source]').forEach(button => button.classList.toggle("active", button.dataset.source === "all")); $$('[data-view]').forEach(button => button.classList.toggle("active", button.dataset.view === view && !subcategory)); $$('[data-mobile-view]').forEach(button => button.classList.toggle("active", button.dataset.mobileView === view)); const config = view === "all" ? ["Everything worth keeping.", "Your archive"] : view === "weekly" ? ["Worth meeting again.", "Resurface"] : [subcategory ? titleCase(subcategory) : CATEGORIES[view].label, subcategory ? `${CATEGORIES[view].label} · nested view` : "Category"]; els.title.textContent = config[0]; els.eyebrow.textContent = config[1]; renderNavigation(); render(); }
 
+const commentExcerpts = new Map();
+let commentCardObserver;
+
+async function showCommentExcerpt(card, record) {
+  const ids = youtubeCommentIds(record.url);
+  if (!ids) return;
+  const quote = card.querySelector('blockquote');
+  quote.textContent = 'Loading comment preview…';
+  const query = new URLSearchParams({ ...ids, view: 'excerpt' }).toString();
+  let entry = commentExcerpts.get(query);
+  if (!entry || entry.expiresAt < Date.now()) {
+    const request = fetch('./api/youtube-comment?' + query, {
+      signal: AbortSignal.timeout(8000), cache: 'no-store'
+    }).then(async response => response.ok ? await response.json() : null).catch(() => null);
+    entry = { request, expiresAt: Date.now() + 60000 };
+    commentExcerpts.delete(query);
+    if (commentExcerpts.size >= 100) commentExcerpts.delete(commentExcerpts.keys().next().value);
+    commentExcerpts.set(query, entry);
+  }
+  const preview = await entry.request;
+  if (!card.isConnected) return;
+  quote.textContent = preview?.excerpt || 'Comment preview unavailable. Open the card to try again.';
+  const title = card.querySelector('.article-card-title');
+  if (title && preview?.author) title.textContent = 'Comment by ' + preview.author;
+}
+
 function render() {
   const records = filteredRecords();
   els.grid.innerHTML = records.map(record => { const source = sourceDetails(record.url, Boolean(record.image)); const tags = record.tags.slice(0, 2).map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join(""); const image = record.image ? `<img class="card-image" src="${escapeHtml(record.image)}" alt="Saved screenshot" />` : ""; const note = record.relevance || record.note; return `<article class="fragment-card" data-id="${escapeHtml(record.id)}" tabindex="0"><div class="card-source"><span class="source-name">${record.url ? "↗ " : record.image ? "⌗ " : "— "}${escapeHtml(record.sourceLabel || source.label)}</span><span class="category-pill">${escapeHtml(record.category)} · ${escapeHtml(record.subcategory)}</span></div>${record.title ? `<h2 class="article-card-title">${escapeHtml(record.title)}</h2>` : ""}<span class="quote-mark">“</span><blockquote>${escapeHtml(record.quote || "Saved for later")}</blockquote>${note ? `<p class="card-note">${escapeHtml(note)}</p>` : ""}${record.resonance ? `<p class="resonance-line">“${escapeHtml(record.resonance)}”</p>` : ""}${image}<div class="card-bottom">${tags}<span class="card-date">${formatDate(record.createdAt)}</span></div></article>`; }).join("");
   els.grid.hidden = records.length === 0; els.empty.hidden = records.length !== 0; els.count.textContent = `${records.length} ${records.length === 1 ? "item" : "items"}`; $("#allCount").textContent = state.records.length; const weeklyNode = $('[data-count="weekly"]'); if (weeklyNode) weeklyNode.textContent = weeklyRecords().length;
-  $$(".fragment-card").forEach(card => { card.onclick = () => openDetail(card.dataset.id); card.onkeydown = event => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); openDetail(card.dataset.id); } }; });
+  if (!commentCardObserver && typeof IntersectionObserver === "function") {
+    commentCardObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const card = entry.target;
+        commentCardObserver.unobserve(card);
+        const record = state.records.find(item => item.id === card.dataset.id);
+        if (card.isConnected && record) void showCommentExcerpt(card, record);
+      }
+    });
+  }
+  commentCardObserver?.disconnect();
+  const recordsById = new Map(records.map(record => [record.id, record]));
+  $$(".fragment-card").forEach(card => {
+    card.onclick = () => openDetail(card.dataset.id);
+    card.onkeydown = event => {
+      if (["Enter", " "].includes(event.key)) { event.preventDefault(); openDetail(card.dataset.id); }
+    };
+    const record = recordsById.get(card.dataset.id);
+    if (!record?.readError || record.commentCopy || !isYouTubeCommentLink(record.url)) return;
+    if (commentCardObserver) commentCardObserver.observe(card);
+    else void showCommentExcerpt(card, record);
+  });
 }
 
 function openDetail(id) { const record = state.records.find(item => item.id === id); if (!record) return; state.currentId = id; const unreadLink = Boolean(record.url && record.readError); $("#relevancePanel").hidden = unreadLink || Boolean(record.articleSnapshot || record.commentCopy); $("#resonancePanel").hidden = unreadLink; $("#detailMeta").textContent = `${record.category} · ${record.subcategory} · ${record.sourceLabel || sourceDetails(record.url, Boolean(record.image)).label}`; $("#detailTitle").textContent = record.title || "Saved fragment"; $("#detailThesis").textContent = record.quote || record.content || "Saved for later"; $("#detailRelevance").textContent = record.relevance || record.note || "This was kept for you to revisit and connect later."; $("#detailResonance").textContent = record.resonance || bestSentence(record.content || record.quote || ""); $("#detailTags").innerHTML = record.tags.map(tag => `<span>#${escapeHtml(tag)}</span>`).join(""); const href = safeUrl(record.url); $("#detailLink").hidden = !href; if (href) $("#detailLink").href = href; $("#deleteRecord").hidden = Boolean(record.curated); els.detail.showModal(); }
